@@ -71,9 +71,9 @@ pipeline {
                 script {
                     sh """
                         docker exec ${CONTAINER_NAME} bash -c 'mvn -N io.takari:maven:wrapper'
-                        docker exec ${CONTAINER_NAME} chmod +x /workspace/mvnw
-                        docker exec ${CONTAINER_NAME} /workspace/mvnw -f /workspace/pom.xml clean -P-webapp
-                        docker exec ${CONTAINER_NAME} /workspace/mvnw -f /workspace/pom.xml verify -P-webapp -P${PROFILE} -DskipTests
+                        docker exec ${CONTAINER_NAME} chmod +x mvnw
+                        docker exec ${CONTAINER_NAME} mvnw -f /pom.xml clean -P-webapp
+                        docker exec ${CONTAINER_NAME} mvnw -f /pom.xml verify -P-webapp -P${PROFILE} -DskipTests
                     """
                 }
             }
