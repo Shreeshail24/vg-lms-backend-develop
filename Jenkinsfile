@@ -69,6 +69,8 @@ pipeline {
         stage('Maven Build') {
             steps {
                 script {
+                    sh "docker exec ${CONTAINER_NAME} ls -la /workspace"
+
                     sh """
                         docker exec ${CONTAINER_NAME} bash -c 'mvn -N io.takari:maven:wrapper'
                         docker exec ${CONTAINER_NAME} chmod +x /workspace/mvnw
