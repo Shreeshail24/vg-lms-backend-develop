@@ -48,9 +48,8 @@ pipeline {
             steps {
                 script {
                     sh """
-                    '''mkdir -p $LOG_DIR'''
-                   STATUS=$(docker inspect -f '{{.State.Running}}' ${CONTAINER_NAME} 2>/dev/null || echo "false")
-                   if [ "$STATUS" != "true" ]; then
+                    mkdir -p ${LOG_DIR}
+                    if [ \$(docker inspect -f '{{.State.Running}}' ${CONTAINER_NAME} 2>/dev/null) != "true" ]; then
                         echo "Creating container: ${CONTAINER_NAME}"
                         docker rm -f ${CONTAINER_NAME} || true
                         docker run -d --name ${CONTAINER_NAME} \
