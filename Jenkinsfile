@@ -32,7 +32,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                    PID=\$(sudo lsof -t -i:${PORT} || true)
+                    PID=\$( lsof -t -i:${PORT} || true)
                     if [ ! -z "\$PID" ]; then
                         echo "Stopping process on port ${PORT} (PID=\$PID)..."
                         sudo kill -9 \$PID
@@ -57,7 +57,7 @@ pipeline {
                             -v ${LOG_DIR}:/logs \
                             -w /workspace \
                             -p ${PORT}:${PORT} \
-                            maven:3.8.7-openjdk-8 sleep infinity
+                            maven:3.8.1-openjdk-8 sleep infinity
                     else
                         echo "Container ${CONTAINER_NAME} already running."
                     fi
