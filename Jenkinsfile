@@ -2,141 +2,122 @@ pipeline {
     agent any
 
     environment {
-        PROFILE = 'dev'  // Default profile
-        PORT = 7075      // Default port
+        PROFILE = 'dev'
+        PORT = 7075
+        CONTAINER_NAME = 'lms_backend_container'
+        LOG_DIR = '/home/logs'
+        JAR_NAME = 'lms-backendapi-0.0.1.jar'
     }
 
     stages {
         stage('Set Profile and Port Based on Branch or Tag') {
             steps {
                 script {
-                    if (env.BRANCH_NAME.contains('release')) {
+                    if (env.BRANCH_NAME?.contains('release')) {
                         PORT = 4242
-                        PROFILE = "qa,no-liquibase"
-                    } else if (env.BRANCH_NAME.contains('tag')) {
+                        PROFILE = 'qa,no-liquibase'
+                    } else if (env.BRANCH_NAME?.contains('tag')) {
                         PORT = 5252
-                        PROFILE = "preprod,no-liquibase"
-                    } else if (env.BRANCH_NAME.contains('develop')) {
+                        PROFILE = 'preprod,no-liquibase'
+                    } else if (env.BRANCH_NAME?.contains('develop')) {
                         PORT = 7075
-                        PROFILE = "dev,no-liquibase"
+                        PROFILE = 'dev,no-liquibase'
                     }
-                    echo "Selected profile: ${PROFILE}, Assigned port: ${PORT}"
+                    echo "Using PROFILE=${PROFILE}, PORT=${PORT}"
                 }
             }
         }
 
-        stage('Stop Service') {
+        stage('Stop Existing App (if any)') {
             steps {
                 script {
                     sh """
-                    # Find the process ID using the given port number
                     PID=\$(sudo lsof -t -i:${PORT} || true)
-
-                    if [ -z "\$PID" ]; then
-                        echo "No process found running on port ${PORT}"
-                    else
-                        echo "Killing process with PID \$PID running on port ${PORT}"
+                    if [ ! -z "\$PID" ]; then
+                        echo "Stopping process on port ${PORT} (PID=\$PID)..."
                         sudo kill -9 \$PID
+                    else
+                        echo "No existing process on port ${PORT}."
                     fi
                     """
                 }
             }
         }
 
-        stage('Pull Java Image and Create Container') {
+        stage('Setup Container') {
             steps {
                 script {
-                    docker.image('ubuntu:latest').pull()
-
                     sh """
-                        docker run -d --name lms_backend_container \
-                        -v ${WORKSPACE}:/workspace \
-                        -w /workspace \
-                        -p ${PORT}:7075 \
-                        ubuntu:latest sleep infinity
-                    """
-
-                    sh """
-                        docker exec lms_backend_container bash -c "
-                        apt update -y && \
-                        apt install -y openjdk-8-jdk maven
-                        "
+                    mkdir -p ${LOG_DIR}
+                    if [ \$(docker inspect -f '{{.State.Running}}' ${CONTAINER_NAME} 2>/dev/null) != "true" ]; then
+                        echo "Creating container: ${CONTAINER_NAME}"
+                        docker rm -f ${CONTAINER_NAME} || true
+                        docker run -d --name ${CONTAINER_NAME} \
+                            -v ${WORKSPACE}:/workspace \
+                            -v ${LOG_DIR}:/logs \
+                            -w /workspace \
+                            -p ${PORT}:${PORT} \
+                            maven:3.8.7-openjdk-8 sleep infinity
+                    else
+                        echo "Container ${CONTAINER_NAME} already running."
+                    fi
                     """
                 }
             }
         }
 
-
-        stage('Maven Install') {
+        stage('Maven Build') {
             steps {
                 script {
                     sh '''
-                        docker exec lms_backend_container bash -c "mvn -N io.takari:maven:wrapper"
+                        docker exec ${CONTAINER_NAME} bash -c "mvn -N io.takari:maven:wrapper"
+                        docker exec ${CONTAINER_NAME} chmod +x /workspace/mvnw
+                        docker exec ${CONTAINER_NAME} /workspace/mvnw -f /workspace/pom.xml clean -P-webapp
+                        docker exec ${CONTAINER_NAME} /workspace/mvnw -f /workspace/pom.xml verify -P-webapp -P${PROFILE} -DskipTests
                     '''
                 }
-                
             }
-            
         }
-        
 
-
-
-        stage('Run Maven Commands') {
+        stage('Approval') {
             steps {
-                script {
-                    sh "docker exec lms_backend_container chmod +x /workspace/mvnw"
-                    sh "docker exec lms_backend_container /workspace/mvnw -f /workspace/pom.xml clean -P-webapp"
-                    sh "docker exec lms_backend_container /workspace/mvnw -f /workspace/pom.xml verify -P-webapp -P${PROFILE} -DskipTests"
+                timeout(time: 20, unit: 'MINUTES') {
+                    input message: "Approve deployment with profile '${PROFILE}' on port ${PORT}?", ok: 'Deploy'
                 }
             }
         }
 
-        stage('Create App Directory and Host Log File') {
-            steps {
-                sh """
-                docker exec lms_backend_container mkdir -p /app
-                mkdir -p /home/logs
-                touch /home/logs/lms-${PORT}.log
-                """
-            }
-        }
-
-        stage('Approve Deployment') {
-            steps {
-                timeout(time: 30, unit: 'MINUTES') {
-                    input message: "Do you approve the deployment with profile '${PROFILE}' on port ${PORT}?", ok: 'Approve'
-                }
-            }
-        }
-
-        stage('Deploy to Container') {
+        stage('Deploy JAR') {
             steps {
                 script {
-                    sh "docker cp ${WORKSPACE}/target/lms-backendapi-0.0.1.jar lms_backend_container:/app/lms-backendapi-0.0.1.jar"
-
                     sh """
-                    sudo tmux new-session -d -s lms-${PORT} \
-                    "docker exec -w /app lms_backend_container java -jar lms-backendapi-0.0.1.jar \
-                    --server.port=${PORT} --spring.profiles.active=${PROFILE} > /home/logs/lms-${PORT}.log 2>&1"
+                        docker cp ${WORKSPACE}/target/${JAR_NAME} ${CONTAINER_NAME}:/app/${JAR_NAME}
+                        docker exec ${CONTAINER_NAME} mkdir -p /app
+                        docker exec -d ${CONTAINER_NAME} bash -c '
+                            nohup java -jar /app/${JAR_NAME} \
+                            --server.port=${PORT} \
+                            --spring.profiles.active=${PROFILE} \
+                            > /logs/lms-${PORT}.log 2>&1 &
+                        '
                     """
                 }
             }
         }
 
-        stage('Check Service Running') {
+        stage('Health Check') {
             steps {
                 script {
-                    sleep(time: 30, unit: 'SECONDS')
+                    sleep(time: 25, unit: 'SECONDS')
                     sh """
-                    PID=\$(sudo lsof -t -i:${PORT} || true)
-
+                    docker exec ${CONTAINER_NAME} bash -c '
+                    PID=\$(lsof -ti:${PORT} || ps aux | grep "${JAR_NAME}" | grep -v grep | awk "{print \\\$2}")
                     if [ -z "\$PID" ]; then
-                        echo "No process found running on port ${PORT}"
+                        echo "App not running on port ${PORT}"
                         exit 1
                     else
-                        echo "Process with PID \$PID running on port ${PORT}"
+                        echo "App running successfully (PID: \$PID)"
                     fi
+                    '
                     """
                 }
             }
@@ -145,12 +126,12 @@ pipeline {
 
     post {
         success {
-            echo 'Build and deployment successful.'
-            sh "tail -n 200 /home/logs/lms-${PORT}.log"
+            echo "✅ Deployment successful!"
+            sh "tail -n 200 ${LOG_DIR}/lms-${PORT}.log"
         }
         failure {
-            echo 'Build or deployment failed.'
-            sh "tail -n 200 /home/logs/lms-${PORT}.log"
+            echo "❌ Deployment failed!"
+            sh "tail -n 200 ${LOG_DIR}/lms-${PORT}.log"
         }
     }
 }
