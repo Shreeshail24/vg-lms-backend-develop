@@ -4,7 +4,7 @@ pipeline {
     environment {
         PROFILE = 'dev'
         PORT = 7075
-        CONTAINER_NAME = 'lms_backend_container'
+        CONTAINER_NAME = ' '
         LOG_DIR = "${WORKSPACE}/logs"  // 👈 Local-friendly log directory
         JAR_NAME = 'lms-backendapi-0.0.1.jar'
     }
