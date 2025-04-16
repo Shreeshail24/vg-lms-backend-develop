@@ -1,0 +1,73 @@
+package com.samsoft.lms.request.entities;
+
+import java.time.LocalDate;
+
+import javax.persistence.CascadeType;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+import javax.persistence.Table;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Entity
+@Table(name="agr_trn_req_repay_variation")
+@Data
+@NoArgsConstructor
+public class AgrTrnReqRepayVariation {
+
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Id
+	
+	@Column(name="nVarID", length = 20)
+	private int varId;
+	
+	@Column(name="sMasterAgrID", length = 20)
+	private String masterAgrId;
+	
+	@Column(name="sLoanID", length = 20)
+	private String loanId;
+	
+	@Column(name="nSrNo", length = 10)
+	private int srNo;
+	
+	@Column(name="nFromInstallmentNo", length = 10)
+	private int fromInstallmentNo;
+	
+	@Column(name="nNoofInstallments", length = 10)
+	private int noofInstallments;
+	
+	@Column(name="sVariationType", length = 20)
+	private String variationType;
+	
+	@Column(name="sVariationOption", length = 20)
+	private String variationOption;
+	
+	@Column(name="nVariationValue", length = 20)
+	private double variationValue;
+	
+	@Column(name="sAdjustmentFactor", length = 20)
+	private String adjustmentFactor;
+	
+	@Column(name = "sUserID", length = 200)
+	private String userId;
+
+	@Column(name = "dLastUpdated")	
+	private LocalDate dtLastUpdated = LocalDate.now();
+
+	@Column(name = "dUserDate")	
+	private LocalDate dtUserDate = LocalDate.now();
+	
+	@ManyToOne(fetch = FetchType.LAZY, optional = false, cascade= CascadeType.ALL)
+	@JoinColumn(name = "nReqId", nullable = false)
+	@JsonIgnore
+	private AgrTrnRequestHdr requestHdr;
+}
