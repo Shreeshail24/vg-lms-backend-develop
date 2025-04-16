@@ -32,7 +32,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                    PID=\$( lsof -t -i:${PORT} || true)
+                    PID=\$(sudo lsof -t -i:${PORT} || true)
                     if [ ! -z "\$PID" ]; then
                         echo "Stopping process on port ${PORT} (PID=\$PID)..."
                         sudo kill -9 \$PID
