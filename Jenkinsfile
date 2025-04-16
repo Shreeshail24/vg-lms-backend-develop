@@ -5,7 +5,7 @@ pipeline {
         PROFILE = 'dev'
         PORT = 7075
         CONTAINER_NAME = 'lms_backend_container'
-        LOG_DIR = '/home/logs'
+        LOG_DIR = '/logs'
         JAR_NAME = 'lms-backendapi-0.0.1.jar'
     }
 
